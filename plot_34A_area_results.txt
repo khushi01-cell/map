@@ -1,0 +1,68 @@
+Plot 34/A Original Boundaries Area Calculation
+==================================================
+
+File: CTP01(LALDARWAJA)FINAL.dxf
+Green boundaries found: 12
+
+Boundary 1:
+  Layer: 0
+  Area: 230.6427 square meters
+  Area: 230.64 m²
+
+Boundary 2:
+  Layer: 0
+  Area: 12.6512 square meters
+  Area: 12.65 m²
+
+Boundary 3:
+  Layer: 0
+  Area: 103.0220 square meters
+  Area: 103.02 m²
+
+Boundary 4:
+  Layer: 0
+  Area: 2.6936 square meters
+  Area: 2.69 m²
+
+Boundary 5:
+  Layer: 0
+  Area: 12.6514 square meters
+  Area: 12.65 m²
+
+Boundary 6:
+  Layer: 0
+  Area: 2.8750 square meters
+  Area: 2.88 m²
+
+Boundary 7:
+  Layer: 0
+  Area: 12.4839 square meters
+  Area: 12.48 m²
+
+Boundary 8:
+  Layer: 0
+  Area: 2.6936 square meters
+  Area: 2.69 m²
+
+Boundary 9:
+  Layer: 0
+  Area: 12.4838 square meters
+  Area: 12.48 m²
+
+Boundary 10:
+  Layer: 0
+  Area: 2.7097 square meters
+  Area: 2.71 m²
+
+Boundary 11:
+  Layer: 0
+  Area: 2.7096 square meters
+  Area: 2.71 m²
+
+Boundary 12:
+  Layer: 0
+  Area: 2.7097 square meters
+  Area: 2.71 m²
+
+Total Area: 400.3263 square meters
+Total Area: 400.33 m²

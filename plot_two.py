@@ -1,66 +1,44 @@
 import ezdxf
-import numpy as np
-from scipy.spatial import ConvexHull
+from ezdxf.math import area, Vec2
 
-DXF_PATH = 'CTP01(LALDARWAJA)FINAL.dxf'
-COLOR_CODES = [3]  # Change this to [162] or any other color code as needed
-TOL = 1e-3
+doc = ezdxf.readfile("CTP01(LALDARWAJA)FINAL.dxf")
+msp = doc.modelspace()
+M2_TO_SQYDS = 1.19599
 
-def points_equal(p1, p2, tol=TOL):
-    return abs(p1[0] - p2[0]) < tol and abs(p1[1] - p2[1]) < tol
+# Collect all text entities for lookup
+text_entities = []
+for e in msp:
+    if e.dxftype() in ["TEXT", "MTEXT"]:
+        try:
+            text = e.plain_text() if e.dxftype() == "MTEXT" else e.dxf.text
+            insert = e.dxf.insert if hasattr(e.dxf, 'insert') else e.dxf.insert
+            text_entities.append((text.strip(), Vec2(insert.x, insert.y)))
+        except Exception:
+            continue
 
-def polygon_area(points):
-    x = [p[0] for p in points]
-    y = [p[1] for p in points]
-    return 0.5 * abs(sum(x[i] * y[(i+1)%len(points)] - y[i] * x[(i+1)%len(points)] for i in range(len(points))))
+# Search for plots in area range
+for idx, entity in enumerate(msp):
+    if entity.dxftype() == "LWPOLYLINE" and entity.closed:
+        points = entity.get_points('xy')
+        raw = area(points)
+        sqyd = raw * M2_TO_SQYDS
 
-def main():
-    doc = ezdxf.readfile(DXF_PATH)
-    msp = doc.modelspace()
-    
-    # Collect all lines of the specified color
-    lines = []
-    for e in msp.query('LINE'):
-        if e.dxf.color in COLOR_CODES:
-            lines.append(((e.dxf.start.x, e.dxf.start.y), (e.dxf.end.x, e.dxf.end.y)))
-    
-    print(f"Found {len(lines)} lines with color(s) {COLOR_CODES}")
-    
-    if len(lines) == 0:
-        print("No lines found for the specified color!")
-        return
-    
-    # Collect all unique endpoints
-    points = []
-    for start, end in lines:
-        if not any(points_equal(start, p) for p in points):
-            points.append(start)
-        if not any(points_equal(end, p) for p in points):
-            points.append(end)
-    
-    print(f"Found {len(points)} unique points")
-    
-    if len(points) < 3:
-        print("Not enough points to form a polygon")
-        return
-    
-    # Order points using convex hull
-    pts = np.array(points)
-    hull = ConvexHull(pts)
-    hull_points = pts[hull.vertices]
-    
-    # Calculate area
-    area_raw = polygon_area(hull_points)
-    
-    # Convert from DXF units to square meters
-    # You may need to adjust the conversion factor for your drawing
-    conversion_factor = 0.0006608  # Example from plot_one_color.py
-    area_m2 = area_raw * conversion_factor
-    
-    print(f"Area of boundaries (color {COLOR_CODES}): {area_m2:.6f} m²")
-    print(f"Raw area (DXF units): {area_raw:.2f}")
-    print(f"Conversion factor used: {conversion_factor}")
-    print(f"Number of hull points: {len(hull_points)}")
+        if 51 <= sqyd <= 52:
+            # Compute centroid of the polyline
+            x = [p[0] for p in points]
+            y = [p[1] for p in points]
+            centroid = Vec2(sum(x)/len(x), sum(y)/len(y))
 
-if __name__ == '__main__':
-    main()
+            # Find closest text entity
+            closest_text = None
+            min_dist = float('inf')
+            for text, position in text_entities:
+                dist = (centroid - position).magnitude
+                if dist < min_dist and dist < 10:
+                    print(f"Checking text '{text}' at distance {dist:.2f}")
+ # 10 units = proximity threshold
+                    min_dist = dist
+                    closest_text = text
+
+            plot_number = closest_text if closest_text else "UNKNOWN"
+            print(f"Plot Number: {plot_number}, Area: {sqyd:.2f} sq.yds, Raw: {raw:.2f}, Entity Index: {idx}")
