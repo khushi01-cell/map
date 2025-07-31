@@ -192,4 +192,4 @@ if area:
         print(f"   This might indicate the wrong polygon was selected.")
         print(f"   Acceptable range: {reference_area * 0.8:.2f} - {reference_area * 1.2:.2f} sq.meter")
 else:
-    print("❌ Could not calculate plot 43 area")
+    print(" Could not calculate plot 43 area")
