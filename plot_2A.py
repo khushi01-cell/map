@@ -24,7 +24,7 @@ def is_green(entity, doc):
 def get_plot_points(entity):
     return [(p[0], p[1]) for p in entity.get_points()]
 
-def find_label_near_centroid(msp, centroid, target_label="43", max_distance=20):
+def find_label_near_centroid(msp, centroid, target_label="2/A", max_distance=20):
     """Find text label near the centroid of a polygon"""
     for entity in msp:
         if entity.dxftype() in ("TEXT", "MTEXT"):
@@ -35,24 +35,25 @@ def find_label_near_centroid(msp, centroid, target_label="43", max_distance=20):
                 if distance <= max_distance:
                     text_value = entity.text if entity.dxftype() == "TEXT" else entity.plain_text()
                     text_value = text_value.strip().replace(" ", "")
-                    if text_value == target_label:
+                    # Check for "2/A", "2A", "2/A", "2/A" variations
+                    if text_value == target_label or text_value == "2A" or text_value == "2/A" or text_value == "2/A":
                         return True, distance
             except Exception:
                 continue
     return False, 0
 
-def calculate_plot_43_area(file_path):
-    """Calculate plot 43 area using green boundary lines"""
+def calculate_plot_2A_area(file_path):
+    """Calculate plot 2/A area using green boundary lines"""
     doc = ezdxf.readfile(file_path)
     msp = doc.modelspace()
 
-    # Reference area for plot 43
-    reference_area = 678.99
+    # Reference area for plot 2/A
+    reference_area = 62.709525
 
-    print("🔍 CALCULATING PLOT 43 AREA (GREEN LINES ONLY)")
+    print("🔍 CALCULATING PLOT 2/A AREA (GREEN LINES ONLY)")
     print("=" * 60)
     
-    # First, find the raw area of plot 43 to calculate the correct conversion factor
+    # First, find the raw area of plot 2/A to calculate the correct conversion factor
     raw_area = None
     for entity in msp.query("LWPOLYLINE"):
         if not entity.closed:
@@ -65,17 +66,17 @@ def calculate_plot_43_area(file_path):
         poly = Polygon(pts)
         centroid = poly.centroid
 
-        # Check for text label "43" near centroid
-        has_label, distance = find_label_near_centroid(msp, centroid, "43")
+        # Check for text label "2/A" near centroid
+        has_label, distance = find_label_near_centroid(msp, centroid, "2/A")
         
         if has_label:
             raw_area = polygon_area(pts)
-            print(f"  Found plot 43 with raw area: {raw_area:.6f} DXF units")
+            print(f"  Found plot 2/A with raw area: {raw_area:.6f} DXF units")
             break
     
-    # If plot 43 not found by label, use first green boundary
+    # If plot 2/A not found by label, use first green boundary
     if raw_area is None:
-        print("  Plot 43 not found by label, using first green boundary...")
+        print("  Plot 2/A not found by label, using first green boundary...")
         for entity in msp.query("LWPOLYLINE"):
             if entity.closed and is_green(entity, doc):
                 pts = get_plot_points(entity)
@@ -91,8 +92,8 @@ def calculate_plot_43_area(file_path):
     conversion_factor = reference_area / raw_area
     print(f"  Calculated conversion factor: {conversion_factor:.6f}")
     
-    # Find plot 43 by looking for polygon with text label "43"
-    plot_43_candidates = []
+    # Find plot 2/A by looking for polygon with text label "2/A"
+    plot_2A_candidates = []
     
     for entity in msp.query("LWPOLYLINE"):
         if not entity.closed:
@@ -107,37 +108,37 @@ def calculate_plot_43_area(file_path):
         area_raw = polygon_area(pts)
         area_m2 = area_raw * conversion_factor
 
-        # Check for text label "43" near centroid
-        has_label, distance = find_label_near_centroid(msp, centroid, "43")
+        # Check for text label "2/A" near centroid
+        has_label, distance = find_label_near_centroid(msp, centroid, "2/A")
         
         if has_label:
-            plot_43_candidates.append((area_m2, area_raw, pts, distance, centroid, entity.dxf.color))
-            print(f"  Found plot 43 candidate:")
+            plot_2A_candidates.append((area_m2, area_raw, pts, distance, centroid, entity.dxf.color))
+            print(f"  Found plot 2/A candidate:")
             print(f"    Area: {area_m2:.6f} m²")
             print(f"    Raw area: {area_raw:.6f} DXF units")
             print(f"    Color: {entity.dxf.color}")
             print(f"    Distance to text: {distance:.2f}")
             print(f"    Points: {len(pts)}")
 
-    if plot_43_candidates:
+    if plot_2A_candidates:
         # Sort by distance to text (closest first)
-        plot_43_candidates.sort(key=lambda x: x[3])
-        best_candidate = plot_43_candidates[0]
+        plot_2A_candidates.sort(key=lambda x: x[3])
+        best_candidate = plot_2A_candidates[0]
         
         area_m2, area_raw, pts, distance, centroid, color = best_candidate
         
-        print(f"\n✅ ORIGINAL PLOT 43 FOUND!")
+        print(f"\n✅ ORIGINAL PLOT 2/A FOUND!")
         print(f"  Area: {area_m2:.2f} sq.meter")
         print(f"  Raw area (DXF units): {area_raw:.2f}")
         print(f"  Conversion factor: {conversion_factor}")
         print(f"  Color: {color}")
-        print(f"  Distance to text '43': {distance:.2f}")
+        print(f"  Distance to text '2/A': {distance:.2f}")
         print(f"  Points: {len(pts)}")
         
         return area_m2
     else:
-        # If no plot 43 found by label, try to find green boundaries
-        print("  No plot 43 found by label, searching green boundaries...")
+        # If no plot 2/A found by label, try to find green boundaries
+        print("  No plot 2/A found by label, searching green boundaries...")
         
         green_boundaries = []
         index = 1
@@ -151,9 +152,9 @@ def calculate_plot_43_area(file_path):
                 index += 1
         
         if green_boundaries:
-            # Return the first green boundary as plot 43
+            # Return the first green boundary as plot 2/A
             area_m2, area_raw, pts, index = green_boundaries[0]
-            print(f"\n✅ ORIGINAL PLOT 43 (Green boundary #{index}):")
+            print(f"\n✅ ORIGINAL PLOT 2/A (Green boundary #{index}):")
             print(f"  Area: {area_m2:.2f} sq.meter")
             print(f"  Raw area (DXF units): {area_raw:.2f}")
             print(f"  Conversion factor: {conversion_factor}")
@@ -165,14 +166,14 @@ def calculate_plot_43_area(file_path):
 
 # Calculate area
 file_path = "CTP01(LALDARWAJA)FINAL.dxf"
-area = calculate_plot_43_area(file_path)
+area = calculate_plot_2A_area(file_path)
 
 if area:
     print(f"\n📊 FINAL RESULT:")
-    print(f"Original Plot 43 Area: {area:.2f} sq.meter")
+    print(f"Original Plot 2/A Area: {area:.2f} sq.meter")
     
     # Compare with reference area
-    reference_area = 678.99
+    reference_area = 62.709525
     difference = area - reference_area
     percentage_diff = (difference / reference_area) * 100
     
@@ -192,4 +193,4 @@ if area:
         print(f"   This might indicate the wrong polygon was selected.")
         print(f"   Acceptable range: {reference_area * 0.8:.2f} - {reference_area * 1.2:.2f} sq.meter")
 else:
-    print("❌ Could not calculate plot 43 area")
+    print("❌ Could not calculate plot 2/A area") 
