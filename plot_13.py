@@ -25,7 +25,7 @@ def is_green(entity, doc):
 def get_plot_points(entity):
     return [(p[0], p[1]) for p in entity.get_points()]
 
-def find_label_near_centroid(msp, centroid, target_label="29", max_distance=100):
+def find_label_near_centroid(msp, centroid, target_label="13", max_distance=100):
     """Find text label near the centroid of a polygon"""
     for entity in msp:
         if entity.dxftype() in ("TEXT", "MTEXT"):
@@ -42,17 +42,20 @@ def find_label_near_centroid(msp, centroid, target_label="29", max_distance=100)
                 continue
     return False, 0, ""
 
-def calculate_plot_29_area(file_path):
-    """Calculate plot 29 area using boundary lines"""
+def calculate_plot_13_area(file_path):
+    """Calculate plot 13 area using boundary lines"""
     doc = ezdxf.readfile(file_path)
     msp = doc.modelspace()
 
-    print("🔍 CALCULATING PLOT 29 AREA (BOUNDARY LINES)")
+    # Reference area for plot 13
+    reference_area = 2424.45
+
+    print("🔍 CALCULATING PLOT 13 AREA (BOUNDARY LINES)")
     print("=" * 60)
     
-    # Find all polygons and plot 29 candidates
+    # Find all polygons and plot 13 candidates
     all_polygons = []
-    plot_29_candidates = []
+    plot_13_candidates = []
     
     for entity in msp.query("LWPOLYLINE"):
         if not entity.closed:
@@ -69,8 +72,8 @@ def calculate_plot_29_area(file_path):
         # Check if it's green
         is_green_color = is_green(entity, doc)
         
-        # Check for plot 29 label
-        has_label, distance, label_text = find_label_near_centroid(msp, centroid, "29")
+        # Check for plot 13 label
+        has_label, distance, label_text = find_label_near_centroid(msp, centroid, "13")
         
         polygon_info = {
             'area': area_raw,
@@ -87,31 +90,31 @@ def calculate_plot_29_area(file_path):
         all_polygons.append(polygon_info)
         
         if has_label:
-            plot_29_candidates.append(polygon_info)
-            print(f"  Found plot 29 candidate: {area_raw:.2f} DXF units")
+            plot_13_candidates.append(polygon_info)
+            print(f"  Found plot 13 candidate: {area_raw:.2f} DXF units")
             print(f"    Color: {entity.dxf.color} (Green: {is_green_color})")
             print(f"    Layer: {entity.dxf.layer}")
             print(f"    Distance to label: {distance:.2f}")
 
     # Sort by area (largest first)
     all_polygons.sort(key=lambda x: x['area'], reverse=True)
-    plot_29_candidates.sort(key=lambda x: x['distance'])  # Closest label first
+    plot_13_candidates.sort(key=lambda x: x['distance'])  # Closest label first
 
     print(f"\n📊 SUMMARY:")
     print(f"Total polygons found: {len(all_polygons)}")
-    print(f"Plot 29 candidates: {len(plot_29_candidates)}")
+    print(f"Plot 13 candidates: {len(plot_13_candidates)}")
 
     # Select the best candidate
     selected_polygon = None
     
-    if plot_29_candidates:
-        # Use the plot 29 candidate with closest label
-        selected_polygon = plot_29_candidates[0]
-        print(f"\n✅ SELECTED: Plot 29 with label (closest)")
+    if plot_13_candidates:
+        # Use the plot 13 candidate with closest label
+        selected_polygon = plot_13_candidates[0]
+        print(f"\n✅ SELECTED: Plot 13 with label (closest)")
     elif all_polygons:
         # Use the largest polygon as fallback
         selected_polygon = all_polygons[0]
-        print(f"\n✅ SELECTED: Largest polygon (no plot 29 label found)")
+        print(f"\n✅ SELECTED: Largest polygon (no plot 13 label found)")
     else:
         print("❌ No suitable polygons found!")
         return None
@@ -122,23 +125,23 @@ def calculate_plot_29_area(file_path):
     print(f"  Layer: {selected_polygon['layer']}")
     print(f"  Points: {selected_polygon['points']}")
     if selected_polygon['has_label']:
-        print(f"  Distance to '29' label: {selected_polygon['distance']:.2f}")
+        print(f"  Distance to '13' label: {selected_polygon['distance']:.2f}")
     
     return selected_polygon['area']
 
 # Calculate area
 file_path = "CTP01(LALDARWAJA)FINAL.dxf"
-raw_area = calculate_plot_29_area(file_path)
+raw_area = calculate_plot_13_area(file_path)
 
 if raw_area:
     print(f"\n📊 FINAL RESULT:")
-    print(f"Original Plot 29 Raw Area: {raw_area:.2f} DXF units")
+    print(f"Original Plot 13 Raw Area: {raw_area:.2f} DXF units")
     
     # Reference area
-    reference_area = 36238.31
+    reference_area = 2424.45
     
-    # Calculate different conversion scenarios WITHOUT using reference area
-    print(f"\n📏 CONVERSION SCENARIOS (INDEPENDENT CALCULATIONS):")
+    # Calculate different conversion scenarios
+    print(f"\n📏 CONVERSION SCENARIOS:")
     conversions = [
         (1.0, "1:1 (1 DXF unit = 1 meter)"),
         (0.01, "1:100 (1 DXF unit = 0.01 meter)"),
@@ -161,10 +164,10 @@ if raw_area:
     print(f"Conversion factor: {exact_conversion:.6f}")
     print(f"This means: 1 DXF unit = {exact_conversion:.6f} meters")
     
-    # Show what the area would be with the exact conversion
+    # Final calculation with exact conversion
     final_area = raw_area * exact_conversion
     print(f"\n🎯 FINAL CALCULATION:")
-    print(f"Plot 29 Area: {final_area:.2f} sq.meter")
+    print(f"Plot 13 Area: {final_area:.2f} sq.meter")
     print(f"Reference Area: {reference_area:.2f} sq.meter")
     print(f"Difference: {final_area - reference_area:+.2f} sq.meter")
     print(f"Percentage: {((final_area - reference_area) / reference_area) * 100:+.2f}%")
@@ -178,11 +181,5 @@ if raw_area:
         print(f"⚠️  WARNING: Exceeds 20% tolerance (±{20:.1f}%)")
         print(f"   Acceptable range: {reference_area * 0.8:.2f} - {reference_area * 1.2:.2f} sq.meter")
     
-    # Show the actual raw area without any conversion
-    print(f"\n🔍 RAW DXF AREA ANALYSIS:")
-    print(f"Raw DXF area: {raw_area:.2f} DXF units²")
-    print(f"This is the actual area calculated from the polygon coordinates")
-    print(f"without any conversion factors applied.")
-    
 else:
-    print("❌ Could not calculate plot 29 area")
+    print("❌ Could not calculate plot 13 area") 
