@@ -7,10 +7,12 @@ class PlotAnalyzer:
         self.dxf_file_path = dxf_file_path
         self.doc = None
         self.msp = None
-        self.scale_factor = 20.0  # 1CM = 20M conversion factor
+        # Remove the hardcoded scale factor - we'll calculate it dynamically
+        self.scale_factor = 1.0  # Start with 1:1 scale
         self.ORIGINAL_COLOR = 3  # Green for original plots
         self.FINAL_COLOR = 1     # Red for final plots
         self.load_dxf_file()
+        self._determine_scale_factor()
     
     def load_dxf_file(self):
         try:
@@ -88,8 +90,8 @@ class PlotAnalyzer:
                     entities.append({
                         'type': entity_type,
                         'layer': entity.dxf.layer,
-                        'area': area,
-                        'perimeter': perimeter,
+                        'area': area,  # Raw DXF area - NO CONVERSION
+                        'perimeter': perimeter,  # Raw DXF perimeter - NO CONVERSION
                         'center': self._get_entity_center(entity),
                         'entity': entity
                     })
@@ -101,15 +103,11 @@ class PlotAnalyzer:
             else:
                 entity_data['plot_number'] = f"UNASSIGNED_{i+1}"
         
-        # Convert to square meters
-        area_sq_meters = self.convert_to_square_meters(total_area)
-        perimeter_meters = self.convert_to_meters(total_perimeter)
-        
         return {
             'plot_type': plot_type,
             'total_entities': len(entities),
-            'total_area_sq_meters': area_sq_meters,
-            'total_perimeter_meters': perimeter_meters,
+            'total_area': total_area,  # Raw DXF area - NO CONVERSION
+            'total_perimeter': total_perimeter,  # Raw DXF perimeter - NO CONVERSION
             'plot_numbers': [p for p in plot_numbers if p != "NIL"],
             'entities': entities
         }
@@ -142,18 +140,27 @@ class PlotAnalyzer:
             if len(points) < 3:
                 return 0.0, 0.0
             
+            # Calculate area using the shoelace formula (surveyor's formula)
             area = 0.0
             perimeter = 0.0
+            
             for i in range(len(points)):
                 j = (i + 1) % len(points)
+                # Shoelace formula for area
                 area += points[i][0] * points[j][1]
                 area -= points[j][0] * points[i][1]
+                
+                # Calculate perimeter
                 dx = points[j][0] - points[i][0]
                 dy = points[j][1] - points[i][1]
                 perimeter += np.sqrt(dx*dx + dy*dy)
             
-            return abs(area) / 2.0, perimeter
-        except Exception:
+            # Area should be positive and divided by 2
+            area = abs(area) / 2.0
+            
+            return area, perimeter
+        except Exception as e:
+            print(f"Error calculating polygon area/perimeter: {e}")
             return 0.0, 0.0
     
     def convert_to_square_meters(self, area_raw: float) -> float:
@@ -165,35 +172,95 @@ class PlotAnalyzer:
         return distance_raw * self.scale_factor
     
     def generate_report(self):
-        """Generate a clean report of the plots mentioned in the PDF"""
+        """Generate a clean report showing ONLY raw DXF values"""
         original = self.get_original_plots()
         final = self.get_final_plots()
         
-        print("\nORIGINAL PLOTS:")
-        print(f"Total plots: {original['total_entities']}")
-        print(f"Total area: {original['total_area_sq_meters']:.2f} sq meters")
-        print(f"Plot numbers: {', '.join(original['plot_numbers'])}")
+        print("=== RAW DXF VALUES (NO SCALE FACTOR APPLIED) ===")
+        print("These are the exact numbers from your DXF file:")
+        
+        print("\nORIGINAL PLOTS (Green entities):")
+        print(f"Total entities found: {original['total_entities']}")
+        print(f"Raw DXF area: {original['total_area']:.6f}")
+        print(f"Raw DXF perimeter: {original['total_perimeter']:.6f}")
+        
+        print("\nFINAL PLOTS (Red entities):")
+        print(f"Total entities found: {final['total_entities']}")
+        print(f"Raw DXF area: {final['total_area']:.6f}")
+        print(f"Raw DXF perimeter: {final['total_perimeter']:.6f}")
+        
+        print("\n=== INDIVIDUAL PLOT DETAILS ===")
+        print("ORIGINAL PLOTS:")
+        for plot in original['entities']:
+            print(f"Plot {plot['plot_number']}: Area={plot['area']:.6f}, Perimeter={plot['perimeter']:.6f}")
         
         print("\nFINAL PLOTS:")
-        print(f"Total plots: {final['total_entities']}")
-        print(f"Total area: {final['total_area_sq_meters']:.2f} sq meters")
-        print(f"Plot numbers: {', '.join(final['plot_numbers'])}")
-        
-        # Generate detailed table
-        print("\nDETAILED PLOT INFORMATION:")
-        print(f"{'Plot No.':<8} {'Type':<10} {'Area (sq m)':<12} {'Perimeter (m)':<12}")
-        print("-" * 40)
-        
-        for plot in original['entities']:
-            print(f"{plot['plot_number']:<8} {'Original':<10} "
-                  f"{self.convert_to_square_meters(plot['area']):<12.2f} "
-                  f"{self.convert_to_meters(plot['perimeter']):<12.2f}")
-        
         for plot in final['entities']:
             if plot['plot_number'] != "NIL":
-                print(f"{plot['plot_number']:<8} {'Final':<10} "
-                      f"{self.convert_to_square_meters(plot['area']):<12.2f} "
-                      f"{self.convert_to_meters(plot['perimeter']):<12.2f}")
+                print(f"Plot {plot['plot_number']}: Area={plot['area']:.6f}, Perimeter={plot['perimeter']:.6f}")
+        
+        print("\n=== NEXT STEPS ===")
+        print("1. Look at the raw DXF values above")
+        print("2. If you know a plot should be X square meters, use this formula:")
+        print("   Scale Factor = √(Known Area ÷ DXF Area)")
+        print("3. Then call: analyzer.set_scale_factor(your_factor)")
+
+    def _determine_scale_factor(self):
+        """Determine the actual scale factor from the DXF file"""
+        try:
+            # Check DXF units
+            if hasattr(self.doc, 'header'):
+                units = getattr(self.doc.header, '$INSUNITS', 0)
+                print(f"DXF Units: {units}")
+                
+                # Common unit codes:
+                # 0 = Unitless
+                # 1 = Inches
+                # 2 = Feet
+                # 3 = Miles
+                # 4 = Millimeters
+                # 5 = Centimeters
+                # 6 = Meters
+                # 7 = Kilometers
+                # 8 = Microinches
+                # 9 = Mils
+                # 10 = Yards
+                # 13 = Nanometers
+                # 14 = Picometers
+                # 15 = Decimeters
+                # 16 = Decameters
+                # 17 = Hectometers
+                # 18 = Gigameters
+                # 19 = Astronomical units
+                # 20 = Light years
+                # 21 = Parsecs
+                
+                # If units are in meters, no conversion needed
+                if units == 6:  # Meters
+                    self.scale_factor = 1.0
+                elif units == 5:  # Centimeters
+                    self.scale_factor = 0.01  # Convert cm to m
+                elif units == 4:  # Millimeters
+                    self.scale_factor = 0.001  # Convert mm to m
+                elif units == 2:  # Feet
+                    self.scale_factor = 0.3048  # Convert feet to m
+                elif units == 1:  # Inches
+                    self.scale_factor = 0.0254  # Convert inches to m
+                else:
+                    # For unitless or unknown units, assume meters
+                    self.scale_factor = 1.0
+                    print("Warning: Unknown units, assuming meters")
+            
+            print(f"Using scale factor: {self.scale_factor}")
+            
+        except Exception as e:
+            print(f"Error determining scale factor: {e}")
+            self.scale_factor = 1.0
+
+    def set_scale_factor(self, factor: float):
+        """Manually set the scale factor"""
+        self.scale_factor = factor
+        print(f"Scale factor set to: {factor}")
 
 def main():
     analyzer = PlotAnalyzer("CTP01(LALDARWAJA)FINAL.dxf")
