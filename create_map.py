@@ -2,36 +2,18 @@
 # -*- coding: utf-8 -*-
 
 """
-Redraw DXF into a clean scheme with specific colors:
-- Original plots: green
-- Final plots: red
-- Roads: red
-- Main border: blue
+Redraw DXF into a clean scheme:
+- Keeps original entity colors & layers exactly as in source DXF
+- Copies plots, roads, borders, and text without forcing new colors
 """
 
 import ezdxf
 
-
-# Color codes
-COLOR_ORIGINAL_PLOT = 3  # Green
-COLOR_FINAL_PLOT    = 1  # Red
-COLOR_ROAD          = 1  # Red
-COLOR_BORDER        = 5  # Blue
-COLOR_TEXT          = 7  # White (optional)
-
-
-def ensure_layers(doc):
-    layers = doc.layers
-    for name, color in [
-        ("PLOTS_ORIGINAL", COLOR_ORIGINAL_PLOT),
-        ("PLOTS_FINAL", COLOR_FINAL_PLOT),
-        ("ROADS", COLOR_ROAD),
-        ("BORDER", COLOR_BORDER),
-        ("TEXT", COLOR_TEXT)
-    ]:
-        if name not in layers:
-            layers.add(name, color=color)
-
+def ensure_layers(src_doc, dst_doc):
+    """Copy all layers from source to destination so colors remain identical"""
+    for layer in src_doc.layers:
+        if layer.dxf.name not in dst_doc.layers:
+            dst_doc.layers.add(layer.dxf.name, color=layer.dxf.color)
 
 def redraw_entities(src_doc, dst_doc):
     src_msp = src_doc.modelspace()
@@ -39,28 +21,44 @@ def redraw_entities(src_doc, dst_doc):
 
     for e in src_msp:
         try:
-            if e.dxftype() in ["LWPOLYLINE", "POLYLINE"]:
-                points = e.get_points("xy") if e.dxftype() == "LWPOLYLINE" else [v.dxf.location for v in e.vertices]
+            if e.dxftype() == "LWPOLYLINE":
+                dst_msp.add_lwpolyline(
+                    e.get_points("xy"),
+                    close=e.closed,
+                    dxfattribs={
+                        "layer": e.dxf.layer,
+                        "color": e.dxf.color,
+                        "linetype": e.dxf.linetype,
+                        "lineweight": e.dxf.lineweight
+                    }
+                )
 
-                # Decide color/layer based on original entity color
-                orig_color = int(getattr(e.dxf, "color", 0) or 0)
-                if orig_color == COLOR_ORIGINAL_PLOT:
-                    layer = "PLOTS_ORIGINAL"
-                    color = COLOR_ORIGINAL_PLOT
-                else:
-                    layer = "PLOTS_FINAL"
-                    color = COLOR_FINAL_PLOT
-   
-                dst_msp.add_lwpolyline(points, close=e.closed, dxfattribs={"layer": layer, "color": color})
+            elif e.dxftype() == "POLYLINE":
+                points = [v.dxf.location for v in e.vertices]
+                dst_msp.add_lwpolyline(
+                    points,
+                    close=e.is_closed,
+                    dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color}
+                )
 
             elif e.dxftype() == "CIRCLE":
-                dst_msp.add_circle(e.dxf.center, e.dxf.radius, dxfattribs={"layer": "PLOTS_ORIGINAL", "color": COLOR_ORIGINAL_PLOT})
+                dst_msp.add_circle(
+                    e.dxf.center, e.dxf.radius,
+                    dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color}
+                )
 
             elif e.dxftype() == "LINE":
-                dst_msp.add_line(e.dxf.start, e.dxf.end, dxfattribs={"layer": "ROADS", "color": COLOR_ROAD})
+                dst_msp.add_line(
+                    e.dxf.start, e.dxf.end,
+                    dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color}
+                )
 
             elif e.dxftype() == "ARC":
-                dst_msp.add_arc(e.dxf.center, e.dxf.radius, e.dxf.start_angle, e.dxf.end_angle, dxfattribs={"layer": "ROADS", "color": COLOR_ROAD})
+                dst_msp.add_arc(
+                    e.dxf.center, e.dxf.radius,
+                    e.dxf.start_angle, e.dxf.end_angle,
+                    dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color}
+                )
 
             elif e.dxftype() == "TEXT":
                 dst_msp.add_text(
@@ -68,38 +66,35 @@ def redraw_entities(src_doc, dst_doc):
                     dxfattribs={
                         "height": e.dxf.height,
                         "rotation": e.dxf.rotation,
-                        "layer": "TEXT",
-                        "color": COLOR_TEXT
+                        "layer": e.dxf.layer,
+                        "color": e.dxf.color
                     }
                 ).set_pos(e.dxf.insert, align=e.get_align())
 
             elif e.dxftype() == "MTEXT":
-                dst_msp.add_mtext(e.text, dxfattribs={"layer": "TEXT", "color": COLOR_TEXT}).set_location(e.dxf.insert)
+                dst_msp.add_mtext(
+                    e.text,
+                    dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color}
+                ).set_location(e.dxf.insert)
 
         except Exception as ex:
             print(f"⚠️ Skipped {e.dxftype()} due to {ex}")
 
-
 def main():
     src_file = "CTP01(LALDARWAJA)FINAL.dxf"
-    dst_file = "redrawn_map.dxf"
+    dst_file = "redrawn_samecolors.dxf"
 
     print(f"Loading {src_file}...")
     src_doc = ezdxf.readfile(src_file)
 
     dst_doc = ezdxf.new("R2010")
-    ensure_layers(dst_doc)
+    ensure_layers(src_doc, dst_doc)
 
-    print("Redrawing entities...")
+    print("Copying entities with original colors...")
     redraw_entities(src_doc, dst_doc)
 
-    # Optional: add main border (blue rectangle around map)
-    dst_msp = dst_doc.modelspace()
-    dst_msp.add_lwpolyline([(0,0), (0,1000), (1000,1000), (1000,0)], close=True, dxfattribs={"layer": "BORDER", "color": COLOR_BORDER})
-
     dst_doc.saveas(dst_file)
-    print(f"✅ Redrawn clean map saved as {dst_file}")
-
+    print(f"✅ Redrawn map (same colors as source) saved as {dst_file}")
 
 if __name__ == "__main__":
     main()
