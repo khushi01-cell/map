@@ -1,43 +1,81 @@
 import ezdxf
-from shapely.geometry import Polygon
-import math
 
-def lwpolyline_to_polygon(entity):
-    """Convert DXF LWPolyline to Shapely Polygon"""
-    points = [point[:2] for point in entity.get_points("xy")]
-    return Polygon(points)
+INPUT_FILE = "CTP01(LALDARWAJA)FINAL.dxf"
+OUTPUT_FILE = "CTP01_scaled_geometry_clean.dxf"
 
-def scale_polygon(entity, target_area):
-    poly = lwpolyline_to_polygon(entity)
-    current_area = poly.area
-    scale_factor = math.sqrt(target_area / current_area)
+SCALE_FACTOR = 2.0  # make map bigger/smaller
 
-    # Scale around centroid
-    cx, cy = poly.centroid.x, poly.centroid.y
-    new_points = []
-    for x, y in poly.exterior.coords[:-1]:  # skip duplicate last point
-        new_x = cx + (x - cx) * scale_factor
-        new_y = cy + (y - cy) * scale_factor
-        new_points.append((new_x, new_y))
+def compute_geometry_centroid(msp):
+    """Compute centroid using only geometry (not text)."""
+    points = []
+    for e in msp:
+        if e.dxftype() == "LWPOLYLINE":
+            points.extend([(p[0], p[1]) for p in e.get_points("xy")])
+        elif e.dxftype() == "LINE":
+            points.extend([(e.dxf.start.x, e.dxf.start.y),
+                           (e.dxf.end.x, e.dxf.end.y)])
+        elif e.dxftype() in {"CIRCLE", "ARC"}:
+            points.append((e.dxf.center.x, e.dxf.center.y))
+    if not points:
+        return (0, 0)
+    cx = sum(p[0] for p in points) / len(points)
+    cy = sum(p[1] for p in points) / len(points)
+    return (cx, cy)
 
-    # Update polyline vertices
-    entity.set_points(new_points, format="xy")
-    print(f"Scaled area from {current_area:.2f} to {target_area:.2f}")
+def scale_point(pt, factor, origin):
+    return (
+        origin[0] + (pt[0] - origin[0]) * factor,
+        origin[1] + (pt[1] - origin[1]) * factor,
+    )
 
-if __name__ == "__main__":
-    input_file = "CTP01(LALDARWAJA)FINAL.dxf"
-    output_file = "modified_final_plot6_area.dxf"
-
-    doc = ezdxf.readfile(input_file)
+def main():
+    doc = ezdxf.readfile(INPUT_FILE)
     msp = doc.modelspace()
 
-    # Target area: 4971 sq.yds → in sq.m
-    target_area_sqm = 4971 * 0.836127  
+    # Only geometry used for centroid
+    origin = compute_geometry_centroid(msp)
+    print(f"Scaling geometry around centroid: {origin}")
 
-    # Find red closed polylines (color 1 = red, or layer "FinalPlots")
-    for entity in msp.query("LWPOLYLINE"):
-        if entity.closed and entity.dxf.color == 1:  # red polyline
-            scale_polygon(entity, target_area_sqm)
+    new_doc = ezdxf.new()
+    new_msp = new_doc.modelspace()
 
-    doc.saveas(output_file)
-    print(f"💾 Saved updated DXF as {output_file}")
+    for e in msp:
+        etype = e.dxftype()
+
+        if etype == "LWPOLYLINE":
+            pts = [(p[0], p[1]) for p in e.get_points("xy")]
+            scaled_pts = [scale_point(p, SCALE_FACTOR, origin) for p in pts]
+            new_msp.add_lwpolyline(
+                scaled_pts,
+                dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color},
+                close=e.closed,
+            )
+
+        elif etype == "LINE":
+            start = scale_point((e.dxf.start.x, e.dxf.start.y), SCALE_FACTOR, origin)
+            end = scale_point((e.dxf.end.x, e.dxf.end.y), SCALE_FACTOR, origin)
+            new_msp.add_line(start, end, dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color})
+
+        elif etype == "CIRCLE":
+            center = scale_point((e.dxf.center.x, e.dxf.center.y), SCALE_FACTOR, origin)
+            new_msp.add_circle(center, e.dxf.radius * SCALE_FACTOR,
+                               dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color})
+
+        elif etype == "ARC":
+            center = scale_point((e.dxf.center.x, e.dxf.center.y), SCALE_FACTOR, origin)
+            new_msp.add_arc(center, e.dxf.radius * SCALE_FACTOR,
+                            e.dxf.start_angle, e.dxf.end_angle,
+                            dxfattribs={"layer": e.dxf.layer, "color": e.dxf.color})
+
+        else:
+            # ✅ Leave text & other annotations untouched
+            try:
+                new_msp.add_foreign_entity(e)
+            except Exception:
+                pass
+
+    new_doc.saveas(OUTPUT_FILE)
+    print(f"✅ Scaled geometry (plots, roads, borders) saved to {OUTPUT_FILE}")
+
+if __name__ == "__main__":
+    main()
