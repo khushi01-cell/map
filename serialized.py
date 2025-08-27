@@ -95,6 +95,7 @@ else:
 # --- Write a Python file that regenerates this DXF with scaling around centroid ---
 with open(output_py, "w", encoding="utf-8") as f:
     f.write("import ezdxf\n\n")
+    f.write("import numpy as np\n\n")
     f.write("SCALE_FACTOR = 5.5  # Adjust scale factor here\n\n")
     f.write(f"ORIGIN = ({cx}, {cy})  # centroid of drawing\n\n")
     f.write("def scale_point(pt, factor=SCALE_FACTOR, origin=ORIGIN):\n")
