@@ -12,7 +12,7 @@ def compute_geometry_centroid(msp):
         if e.dxftype() == "LWPOLYLINE":
             points.extend([(p[0], p[1]) for p in e.get_points("xy")])
         elif e.dxftype() == "LINE":
-            points.extend([(e.dxf.start.x, e.dxf.start.y),
+            points.extend([(e.dxf.start.x, e.dxf.start.y)
                            (e.dxf.end.x, e.dxf.end.y)])
         elif e.dxftype() in {"CIRCLE", "ARC"}:
             points.append((e.dxf.center.x, e.dxf.center.y))
